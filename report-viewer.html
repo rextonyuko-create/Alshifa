@@ -1,0 +1,42 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Report Viewer | Alshifa Pathology Lab</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Merriweather:wght@700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container nav-wrap">
+      <a href="index.html" class="brand">
+        <span class="brand-mark">A</span>
+        <span class="brand-text">Alshifa Pathology Lab</span>
+      </a>
+      <nav class="nav-links doctor-top-nav show">
+        <a href="customer-dashboard.html">Customer Panel</a>
+        <a href="doctor-dashboard.html">Doctor Panel</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="doctor-main">
+    <section class="section">
+      <div class="container">
+        <p class="eyebrow">Patient Report</p>
+        <h1>Report Viewer</h1>
+        <p id="viewerMeta" class="hero-copy"></p>
+
+        <div id="viewerBox" class="viewer-box quality-box">
+          <p>Loading report...</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="report-viewer.js"></script>
+</body>
+</html>

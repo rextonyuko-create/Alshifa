@@ -1,0 +1,53 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Doctor Login | Alshifa Pathology Lab</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Merriweather:wght@700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container nav-wrap">
+      <a href="index.html" class="brand">
+        <span class="brand-mark">A</span>
+        <span class="brand-text">Alshifa Pathology Lab</span>
+      </a>
+      <nav class="nav-links doctor-top-nav">
+        <a href="index.html">Main Website</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="doctor-main">
+    <section class="doctor-login-section">
+      <div class="container">
+        <div class="doctor-login-card">
+          <p class="eyebrow">Doctor Access</p>
+          <h1>Login to Appointment Dashboard</h1>
+          <p class="hero-copy">This page is for doctor/staff access to view booked appointments in read-only mode.</p>
+
+          <form id="doctorLoginForm" class="booking-form" novalidate>
+            <label>
+              Doctor ID
+              <input type="text" name="doctorId" placeholder="Enter doctor ID" required />
+            </label>
+            <label>
+              Password
+              <input type="password" name="password" placeholder="Enter password" required />
+            </label>
+            <button type="submit" class="btn btn-primary">Login</button>
+            <p class="form-note">Demo credentials: <strong>doctor</strong> / <strong>alshifa123</strong></p>
+            <p id="doctorLoginMessage" class="booking-message" role="status" aria-live="polite"></p>
+          </form>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="doctor.js"></script>
+</body>
+</html>

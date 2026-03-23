@@ -1,0 +1,40 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Customer Dashboard | Alshifa Pathology Lab</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Merriweather:wght@700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container nav-wrap">
+      <a href="index.html" class="brand">
+        <span class="brand-mark">A</span>
+        <span class="brand-text">Alshifa Pathology Lab</span>
+      </a>
+      <nav class="nav-links doctor-top-nav show">
+        <a href="index.html">Main Website</a>
+        <button id="customerLogoutBtn" class="btn btn-outline" type="button">Logout</button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="doctor-main">
+    <section class="section">
+      <div class="container">
+        <p class="eyebrow">Customer Panel</p>
+        <h1>Appointment & Report</h1>
+        <p id="customerMeta" class="hero-copy"></p>
+
+        <div id="customerCard" class="quality-box report-card"></div>
+      </div>
+    </section>
+  </main>
+
+  <script src="customer.js"></script>
+</body>
+</html>
