@@ -1,18 +1,21 @@
-﻿const bookingForm = document.getElementById("bookingForm");
-const dateInput = document.getElementById("dateInput");
-const slotSelect = document.getElementById("slotSelect");
-const bookingMessage = document.getElementById("bookingMessage");
-const menuToggle = document.querySelector(".menu-toggle");
-const navLinks = document.querySelector(".nav-links");
+// ── Supabase config ────────────────────────────────────────────────────────
+const SUPABASE_URL      = "https://zzxemxfwngaxqipqikucw.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp6ZW14ZnduZ2F4cWlwcWlrdWN3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAxOTA2NDAsImV4cCI6MjA5NTc2NjY0MH0.2mw_EtCevpoombb1UK7Gxu-qXX9LW5tpBxqHX8gzkYI";
 
-const weekdaySlots = ["7:00 AM", "7:30 AM", "8:00 AM", "8:30 AM", "9:00 AM", "10:00 AM", "11:00 AM", "12:00 PM", "4:00 PM", "5:00 PM"];
-const sundaySlots = ["8:00 AM", "8:30 AM", "9:00 AM", "10:00 AM", "11:00 AM", "12:00 PM", "1:00 PM"];
-const APPOINTMENTS_KEY = "alshifaAppointments";
+// ── DOM refs ────────────────────────────────────────────────────────────────
+const bookingForm   = document.getElementById("bookingForm");
+const dateInput     = document.getElementById("dateInput");
+const slotSelect    = document.getElementById("slotSelect");
+const bookingMessage = document.getElementById("bookingMessage");
+const menuToggle    = document.querySelector(".menu-toggle");
+const navLinks      = document.querySelector(".nav-links");
+
+// ── Slots ───────────────────────────────────────────────────────────────────
+const weekdaySlots = ["7:00 AM","7:30 AM","8:00 AM","8:30 AM","9:00 AM","10:00 AM","11:00 AM","12:00 PM","4:00 PM","5:00 PM"];
+const sundaySlots  = ["8:00 AM","8:30 AM","9:00 AM","10:00 AM","11:00 AM","12:00 PM","1:00 PM"];
 
 const today = new Date();
-const toISODate = (date) => date.toISOString().split("T")[0];
-
-dateInput.min = toISODate(today);
+dateInput.min = today.toISOString().split("T")[0];
 
 function setSlots() {
   const selected = dateInput.value;
@@ -38,31 +41,32 @@ function setSlots() {
 function showMessage(text, status) {
   bookingMessage.textContent = text;
   bookingMessage.classList.remove("success", "error");
-  if (status) {
-    bookingMessage.classList.add(status);
-  }
+  if (status) bookingMessage.classList.add(status);
 }
 
-function getStoredAppointments() {
-  const raw = localStorage.getItem(APPOINTMENTS_KEY);
-  if (!raw) {
-    return [];
+// ── Save booking directly to Supabase ───────────────────────────────────────
+async function saveBookingToSupabase(record) {
+  const resp = await fetch(`${SUPABASE_URL}/rest/v1/bookings`, {
+    method: "POST",
+    headers: {
+      "apikey": SUPABASE_ANON_KEY,
+      "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+      "Content-Type": "application/json",
+      "Prefer": "return=representation"
+    },
+    body: JSON.stringify(record)
+  });
+
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({}));
+    throw new Error(err.message || "Failed to save booking.");
   }
 
-  try {
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+  const rows = await resp.json();
+  return rows[0]; // returns the inserted row with its DB-generated id
 }
 
-function saveAppointment(record) {
-  const appointments = getStoredAppointments();
-  appointments.push(record);
-  localStorage.setItem(APPOINTMENTS_KEY, JSON.stringify(appointments));
-}
-
+// ── Events ──────────────────────────────────────────────────────────────────
 dateInput.addEventListener("change", setSlots);
 
 bookingForm.addEventListener("submit", async (event) => {
@@ -74,62 +78,36 @@ bookingForm.addEventListener("submit", async (event) => {
     return;
   }
 
-  const formData = new FormData(bookingForm);
-  const name = formData.get("name");
-  const email = formData.get("email") || `${name.replace(/\s+/g, '').toLowerCase()}@alshifalab.com`;
-  const test = formData.get("test");
-  const date = formData.get("date");
-  const slot = formData.get("slot");
-  const phone = formData.get("phone");
+  showMessage("Submitting booking…", "");
+
+  const formData   = new FormData(bookingForm);
+  const name       = formData.get("name");
+  const phone      = formData.get("phone");
+  const test       = formData.get("test");
+  const date       = formData.get("date");
+  const slot       = formData.get("slot");
   const collection = formData.get("collection");
 
-  // Save to localStorage
-  saveAppointment({
-    id: `APT-${Date.now()}`,
-    name,
-    phone,
-    test,
-    date,
-    slot,
-    collection,
-    status: "Pending",
-    report: null,
-    bookedAt: new Date().toISOString()
-  });
-
-  // Send to Supabase API
   try {
-    const response = await fetch('/api/bookings', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name,
-        phone,
-        email,
-        test,
-        date,
-        slot,
-        collection
-      })
+    const inserted = await saveBookingToSupabase({
+      name,
+      phone,
+      test,
+      appointment_date: date,
+      time_slot: slot,
+      collection_type: collection,
+      status: "Pending"
     });
 
-    if (!response.ok) {
-      throw new Error('Failed to save booking');
-    }
-
-    const latestAppointments = getStoredAppointments();
-    const bookingId = latestAppointments.length ? latestAppointments[latestAppointments.length - 1].id : "N/A";
-    showMessage(`Booked successfully. ID: ${bookingId}. Use ID + phone in Customer Login to view reports.`, "success");
+    const bookingId = inserted ? String(inserted.id) : "N/A";
+    showMessage(
+      `Booked successfully! Your Booking ID: ${bookingId}. Use this ID + your phone number to view your report in Customer Login.`,
+      "success"
+    );
     bookingForm.reset();
     slotSelect.innerHTML = '<option value="">Select date first</option>';
-  } catch (error) {
-    console.error('API Error:', error);
-    // Show success anyway since localStorage worked
-    const latestAppointments = getStoredAppointments();
-    const bookingId = latestAppointments.length ? latestAppointments[latestAppointments.length - 1].id : "N/A";
-    showMessage(`Booked successfully. ID: ${bookingId}. Use ID + phone in Customer Login to view reports.`, "success");
-    bookingForm.reset();
-    slotSelect.innerHTML = '<option value="">Select date first</option>';
+  } catch (err) {
+    showMessage("Booking failed: " + err.message, "error");
   }
 });
 
