@@ -1,47 +1,214 @@
-const SUPABASE_URL = "https://zzxemxfwngaxqipqikucw.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp6ZW14ZnduZ2F4cWlwcWlrdWN3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAxOTA2NDAsImV4cCI6MjA5NTc2NjY0MH0.2mw_EtCevpoombb1UK7Gxu-qXX9LW5tpBxqHX8gzkYI";
+const APPOINTMENTS_KEY = "alshifaAppointments";
+const CUSTOMER_SESSION_KEY = "alshifaCustomerSession";
+const DOCTOR_SESSION_KEY = "alshifaDoctorSession";
 
-const params    = new URLSearchParams(window.location.search);
-const bookingId = params.get("id");
-const container = document.getElementById("reportContainer");
+function getStoredAppointments() {
+  const raw = localStorage.getItem(APPOINTMENTS_KEY);
+  if (!raw) {
+    return [];
+  }
 
-if (!bookingId) {
-  container.innerHTML = "<p style='color:red'>No booking ID provided.</p>";
-} else {
-  fetch(
-    `${SUPABASE_URL}/rest/v1/bookings?id=eq.${encodeURIComponent(bookingId)}&select=*`,
-    {
-      headers: {
-        "apikey": SUPABASE_ANON_KEY,
-        "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function formatDateTime(iso) {
+  if (!iso) {
+    return "-";
+  }
+
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) {
+    return iso;
+  }
+  return date.toLocaleString();
+}
+
+function normalizeLocalAppointment(row) {
+  if (!row) {
+    return null;
+  }
+
+  return {
+    id: row.id || row.bookingId || "",
+    bookingId: row.bookingId || row.id || "",
+    name: row.name || row.full_name || "",
+    phone: row.phone || "",
+    test: row.test || row.test_name || "",
+    date: row.date || row.appointment_date || "",
+    slot: row.slot || row.time_slot || "",
+    collection: row.collection || row.collection_type || "",
+    status: row.status || (row.report ? "Completed" : "Pending"),
+    bookedAt: row.bookedAt || row.booked_at || "",
+    report: row.report ? {
+      fileName: row.report.fileName || row.report.file_name || "",
+      mimeType: row.report.mimeType || row.report.mime_type || "",
+      content: row.report.content || row.report.publicUrl || row.report.public_url || "",
+      note: row.report.note || row.report.doctor_note || "",
+      uploadedAt: row.report.uploadedAt || row.report.uploaded_at || ""
+    } : null
+  };
+}
+
+function mergeAppointmentData(primary, fallback) {
+  if (!primary && !fallback) {
+    return null;
+  }
+
+  const merged = {
+    ...(fallback || {}),
+    ...(primary || {})
+  };
+
+  merged.id = primary?.id || fallback?.id || fallback?.bookingId || "";
+  merged.bookingId = primary?.bookingId || merged.id;
+  merged.name = primary?.name || fallback?.name || "";
+  merged.report = primary?.report || fallback?.report || null;
+
+  return merged;
+}
+
+function normalizeApiAppointment(booking) {
+  if (!booking) {
+    return null;
+  }
+
+  const reports = Array.isArray(booking.als_reports)
+    ? booking.als_reports
+    : booking.als_reports
+      ? [booking.als_reports]
+      : [];
+  const latestReport = reports[0] || null;
+
+  return {
+    id: booking.booking_id || booking.id,
+    bookingId: booking.booking_id || booking.id,
+    name: booking.full_name || booking.name || "",
+    phone: booking.phone || "",
+    test: booking.test_name || booking.test || "",
+    date: booking.appointment_date || booking.date || "",
+    slot: booking.time_slot || booking.slot || "",
+    collection: booking.collection_type || booking.collection || "",
+    status: booking.status || (latestReport ? "Completed" : "Pending"),
+    bookedAt: booking.booked_at || booking.bookedAt || "",
+    report: latestReport
+      ? {
+          fileName: latestReport.file_name || latestReport.fileName || "",
+          mimeType: latestReport.mime_type || latestReport.mimeType || "",
+          content: latestReport.public_url || latestReport.publicUrl || "",
+          note: latestReport.doctor_note || latestReport.note || "",
+          uploadedAt: latestReport.uploaded_at || latestReport.uploadedAt || ""
+        }
+      : booking.report || null
+  };
+}
+
+async function fetchAppointmentFromApi(appointmentId) {
+  try {
+    const customerSessionRaw = localStorage.getItem(CUSTOMER_SESSION_KEY);
+    if (customerSessionRaw && window.alsCustomerLookup) {
+      const customerSession = JSON.parse(customerSessionRaw);
+      const response = await window.alsCustomerLookup(appointmentId, customerSession.phone);
+      if (response.ok) {
+        const row = Array.isArray(response.data) ? response.data[0] : response.data;
+        return mergeAppointmentData(
+          normalizeApiAppointment({
+            booking_id: row.booking_id,
+            id: row.id,
+            full_name: row.full_name,
+            report: row.report ? [row.report] : []
+          }),
+          normalizeLocalAppointment(getStoredAppointments().find((item) => item.id === appointmentId))
+        );
       }
     }
-  )
-  .then((r) => r.json())
-  .then((data) => {
-    if (!data || data.length === 0 || !data[0].report_url) {
-      container.innerHTML = "<p>No report found for this booking.</p>";
-      return;
+
+    const doctorSessionRaw = localStorage.getItem(DOCTOR_SESSION_KEY);
+    if (doctorSessionRaw && window.alsFetchAppointmentByBookingId) {
+      const doctorSession = JSON.parse(doctorSessionRaw);
+      const response = await window.alsFetchAppointmentByBookingId(doctorSession.access_token, appointmentId);
+      if (response.ok) {
+        const row = Array.isArray(response.data) ? response.data[0] : response.data;
+        return mergeAppointmentData(
+          normalizeApiAppointment(row),
+          normalizeLocalAppointment(getStoredAppointments().find((item) => item.id === appointmentId))
+        );
+      }
     }
-    const b = data[0];
-    const isImage = /\.(png|jpg|jpeg|gif|webp)$/i.test(b.report_filename || "");
-    container.innerHTML = `
-      <h3>Report for ${b.name}</h3>
-      <p><strong>Test:</strong> ${b.test}</p>
-      <p><strong>Date:</strong> ${b.appointment_date}</p>
-      <p><strong>Note:</strong> ${b.report_note || "None"}</p>
-      <div style="margin-top:16px">
-        ${isImage
-          ? `<img src="${b.report_url}" style="max-width:100%;border-radius:8px"/>`
-          : `<iframe src="${b.report_url}" style="width:100%;height:80vh;border:none;border-radius:8px"></iframe>`
-        }
-      </div>
-      <a href="${b.report_url}" download="${b.report_filename}" style="display:inline-block;margin-top:12px;padding:10px 20px;background:#1a73e8;color:#fff;border-radius:6px;text-decoration:none">
-        Download Report
-      </a>
-    `;
-  })
-  .catch((err) => {
-    container.innerHTML = `<p style="color:red">Error loading report: ${err.message}</p>`;
-  });
+
+    return normalizeLocalAppointment(getStoredAppointments().find((item) => item.id === appointmentId));
+  } catch {
+    return null;
+  }
 }
+
+async function renderReportViewer() {
+  const viewerBox = document.getElementById("viewerBox");
+  const viewerMeta = document.getElementById("viewerMeta");
+  if (!viewerBox) {
+    return;
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  const appointmentId = params.get("appointmentId");
+
+  if (!appointmentId) {
+    viewerBox.innerHTML = "<p>Invalid report link.</p>";
+    return;
+  }
+
+  const appointment = await fetchAppointmentFromApi(appointmentId)
+    || normalizeLocalAppointment(getStoredAppointments().find((item) => item.id === appointmentId));
+
+  if (!appointment) {
+    viewerBox.innerHTML = "<p>Appointment not found.</p>";
+    return;
+  }
+
+  if (viewerMeta) {
+    viewerMeta.textContent = `Patient: ${appointment.name || "-"} | Booking ID: ${appointment.id || "-"}`;
+  }
+
+  if (!appointment.report || !appointment.report.content) {
+    viewerBox.innerHTML = "<p>Report is not uploaded yet for this appointment.</p>";
+    return;
+  }
+
+  const report = appointment.report;
+  const isPdf = (report.mimeType || "").includes("pdf") || (report.fileName || "").toLowerCase().endsWith(".pdf");
+  const isImage = (report.mimeType || "").startsWith("image/");
+
+  if (isPdf) {
+    viewerBox.innerHTML = `
+      <p><strong>Report:</strong> ${report.fileName || "-"}</p>
+      <p><strong>Uploaded:</strong> ${formatDateTime(report.uploadedAt)}</p>
+      <div class="pdf-frame-wrap">
+        <iframe title="Patient Report PDF" src="${report.content}" class="pdf-frame"></iframe>
+      </div>
+      <p><a class="btn btn-primary" download="${report.fileName || "report"}" href="${report.content}">Download Report</a></p>
+    `;
+    return;
+  }
+
+  if (isImage) {
+    viewerBox.innerHTML = `
+      <p><strong>Report:</strong> ${report.fileName || "-"}</p>
+      <p><strong>Uploaded:</strong> ${formatDateTime(report.uploadedAt)}</p>
+      <img class="report-preview-image" src="${report.content}" alt="Patient report preview" />
+      <p><a class="btn btn-primary" download="${report.fileName || "report"}" href="${report.content}">Download Report</a></p>
+    `;
+    return;
+  }
+
+  viewerBox.innerHTML = `
+    <p><strong>Report:</strong> ${report.fileName || "-"}</p>
+    <p>This file type cannot be previewed directly.</p>
+    <p><a class="btn btn-primary" download="${report.fileName || "report"}" href="${report.content}">Download Report</a></p>
+  `;
+}
+
+renderReportViewer();

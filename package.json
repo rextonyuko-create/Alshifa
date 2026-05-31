@@ -3,6 +3,10 @@
   "version": "1.0.0",
   "description": "Alshifa Pathology Lab booking system",
   "private": true,
+  "scripts": {
+    "start": "node server.mjs",
+    "dev": "node server.mjs"
+  },
   "dependencies": {
     "@supabase/supabase-js": "^2.38.0"
   }

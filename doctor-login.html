@@ -25,31 +25,30 @@
   <main class="doctor-main">
     <section class="doctor-login-section">
       <div class="container">
-        <div id="loginSection" class="doctor-login-card">
+        <div class="doctor-login-card">
           <p class="eyebrow">Doctor Access</p>
           <h1>Login to Appointment Dashboard</h1>
-          <p class="hero-copy">This page is for doctor/staff access to view and manage appointments.</p>
+          <p class="hero-copy">This page is for doctor/staff access to view booked appointments in read-only mode.</p>
 
-          <form id="loginForm" class="booking-form" novalidate>
+          <form id="doctorLoginForm" class="booking-form" novalidate>
             <label>
               Doctor ID
-              <input type="text" id="username" name="username" placeholder="Enter doctor ID" required />
+              <input type="text" name="doctorId" placeholder="Enter doctor ID" required />
             </label>
             <label>
               Password
-              <input type="password" id="password" name="password" placeholder="Enter password" required />
+              <input type="password" name="password" placeholder="Enter password" required />
             </label>
             <button type="submit" class="btn btn-primary">Login</button>
-            <p class="form-note">
-              Demo credentials: <strong>doctor</strong> / <strong>alshifa123</strong>
-            </p>
-            <p id="loginMessage" class="booking-message" role="status" aria-live="polite"></p>
+            <p class="form-note">Temporary login: <strong>doctor</strong> / <strong>alshifa123</strong></p>
+            <p id="doctorLoginMessage" class="booking-message" role="status" aria-live="polite"></p>
           </form>
         </div>
       </div>
     </section>
   </main>
 
+  <script src="supabase-browser.js"></script>
   <script src="doctor.js"></script>
 </body>
 </html>
