@@ -1,0 +1,130 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Doctor Dashboard | Alshifa Pathology Lab</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Merriweather:wght@700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container nav-wrap">
+      <a href="index.html" class="brand">
+        <span class="brand-mark">A</span>
+        <span class="brand-text">Alshifa Pathology Lab</span>
+      </a>
+      <nav class="nav-links doctor-top-nav show">
+        <a href="index.html">Main Website</a>
+        <button id="doctorLogoutBtn" class="btn btn-outline" type="button">Logout</button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="doctor-main">
+    <section class="section">
+      <div class="container">
+        <div class="dashboard-head">
+          <div>
+            <p class="eyebrow">Doctor Dashboard</p>
+            <h1>Booked Appointments</h1>
+            <p class="hero-copy">Click patient name to open profile and upload final report.</p>
+          </div>
+          <div class="dashboard-metrics">
+            <article>
+              <p>Total</p>
+              <h3 id="totalCount">0</h3>
+            </article>
+            <article>
+              <p>Filtered</p>
+              <h3 id="filteredCount">0</h3>
+            </article>
+          </div>
+        </div>
+
+        <div class="filters-grid">
+          <label>
+            Filter by Date
+            <input type="date" id="filterDate" />
+          </label>
+          <label>
+            Filter by Test
+            <select id="filterTest">
+              <option value="">All Tests</option>
+            </select>
+          </label>
+          <label>
+            Filter by Collection
+            <select id="filterCollection">
+              <option value="">All Types</option>
+              <option>Lab Visit</option>
+              <option>Home Collection</option>
+            </select>
+          </label>
+          <label>
+            Filter by Status
+            <select id="filterStatus">
+              <option value="">All Status</option>
+              <option>Pending</option>
+              <option>Completed</option>
+            </select>
+          </label>
+          <label>
+            Search Name/Phone
+            <input type="text" id="filterSearch" placeholder="Type patient name or number" />
+          </label>
+          <button type="button" id="clearFiltersBtn" class="btn btn-outline">Clear Filters</button>
+        </div>
+
+        <div class="table-wrap">
+          <table class="appointments-table">
+            <thead>
+              <tr>
+                <th>Booking ID</th>
+                <th>Patient</th>
+                <th>Phone</th>
+                <th>Test</th>
+                <th>Date</th>
+                <th>Slot</th>
+                <th>Collection</th>
+                <th>Status</th>
+                <th>Booked At</th>
+              </tr>
+            </thead>
+            <tbody id="appointmentsBody"></tbody>
+          </table>
+        </div>
+        <p id="emptyState" class="form-note"></p>
+      </div>
+    </section>
+  </main>
+
+  <div id="reportModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="reportModalTitle">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h2 id="reportModalTitle">Patient Report Management</h2>
+        <button id="closeModalBtn" type="button" class="btn btn-outline">Close</button>
+      </div>
+      <div id="modalPatientInfo" class="form-note"></div>
+      <form id="reportUploadForm" class="booking-form compact-form" novalidate>
+        <label>
+          Report File (PDF/Image)
+          <input id="reportFileInput" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp" required />
+        </label>
+        <label>
+          Doctor Note (optional)
+          <input id="doctorNoteInput" type="text" placeholder="Short note for patient report" />
+        </label>
+        <button type="submit" class="btn btn-primary">Upload Report & Mark Completed</button>
+        <p class="form-note">Patient can access this report from customer login panel.</p>
+        <p id="uploadMessage" class="booking-message" role="status" aria-live="polite"></p>
+      </form>
+      <div id="existingReportBox" class="quality-box hidden"></div>
+    </div>
+  </div>
+
+  <script src="doctor.js"></script>
+</body>
+</html>
