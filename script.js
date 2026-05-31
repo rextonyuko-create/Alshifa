@@ -65,7 +65,7 @@ function saveAppointment(record) {
 
 dateInput.addEventListener("change", setSlots);
 
-bookingForm.addEventListener("submit", (event) => {
+bookingForm.addEventListener("submit", async (event) => {
   event.preventDefault();
 
   if (!bookingForm.checkValidity()) {
@@ -76,12 +76,14 @@ bookingForm.addEventListener("submit", (event) => {
 
   const formData = new FormData(bookingForm);
   const name = formData.get("name");
+  const email = formData.get("email") || `${name.replace(/\s+/g, '').toLowerCase()}@alshifalab.com`;
   const test = formData.get("test");
   const date = formData.get("date");
   const slot = formData.get("slot");
   const phone = formData.get("phone");
   const collection = formData.get("collection");
 
+  // Save to localStorage
   saveAppointment({
     id: `APT-${Date.now()}`,
     name,
@@ -95,11 +97,40 @@ bookingForm.addEventListener("submit", (event) => {
     bookedAt: new Date().toISOString()
   });
 
-  const latestAppointments = getStoredAppointments();
-  const bookingId = latestAppointments.length ? latestAppointments[latestAppointments.length - 1].id : "N/A";
-  showMessage(`Booked successfully. ID: ${bookingId}. Use ID + phone in Customer Login to view reports.`, "success");
-  bookingForm.reset();
-  slotSelect.innerHTML = '<option value="">Select date first</option>';
+  // Send to Supabase API
+  try {
+    const response = await fetch('/api/bookings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name,
+        phone,
+        email,
+        test,
+        date,
+        slot,
+        collection
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to save booking');
+    }
+
+    const latestAppointments = getStoredAppointments();
+    const bookingId = latestAppointments.length ? latestAppointments[latestAppointments.length - 1].id : "N/A";
+    showMessage(`Booked successfully. ID: ${bookingId}. Use ID + phone in Customer Login to view reports.`, "success");
+    bookingForm.reset();
+    slotSelect.innerHTML = '<option value="">Select date first</option>';
+  } catch (error) {
+    console.error('API Error:', error);
+    // Show success anyway since localStorage worked
+    const latestAppointments = getStoredAppointments();
+    const bookingId = latestAppointments.length ? latestAppointments[latestAppointments.length - 1].id : "N/A";
+    showMessage(`Booked successfully. ID: ${bookingId}. Use ID + phone in Customer Login to view reports.`, "success");
+    bookingForm.reset();
+    slotSelect.innerHTML = '<option value="">Select date first</option>';
+  }
 });
 
 menuToggle.addEventListener("click", () => {

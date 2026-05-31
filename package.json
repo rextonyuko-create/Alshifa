@@ -1,0 +1,9 @@
+{
+  "name": "alshifa-pathology",
+  "version": "1.0.0",
+  "description": "Alshifa Pathology Lab booking system",
+  "private": true,
+  "dependencies": {
+    "@supabase/supabase-js": "^2.38.0"
+  }
+}
