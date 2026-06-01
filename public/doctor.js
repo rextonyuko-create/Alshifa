@@ -194,6 +194,12 @@ function statusBadge(status) {
   return '<span class="status-badge pending">Pending</span>';
 }
 
+function reportDownloadUrl(appointment) {
+  const bookingId = appointment?.bookingId || appointment?.id || "";
+  const params = new URLSearchParams({ bookingId });
+  return `/api/report-download?${params.toString()}`;
+}
+
 async function loginStaff(doctorId, password) {
   const response = await apiJson("/api/staff-login", {
     method: "POST",
@@ -370,7 +376,7 @@ async function setupDoctorDashboardPage() {
         <td>${item.report.uploadedAt ? new Date(item.report.uploadedAt).toLocaleDateString() : "-"}</td>
         <td>
           <a href="${item.report.content}" target="_blank" class="action-btn" style="text-decoration:none">View</a>
-          <a href="${item.report.content}" download="${item.report.fileName}" class="action-btn" style="text-decoration:none;margin-left:4px">Download</a>
+          <a href="${reportDownloadUrl(item)}" download="${item.report.fileName}" class="action-btn" style="text-decoration:none;margin-left:4px">Download</a>
         </td>
       </tr>
     `).join("");
@@ -481,7 +487,7 @@ async function setupDoctorDashboardPage() {
         <p><strong>Note:</strong> ${appointment.report.note || "-"}</p>
         <p>
           <a class="btn btn-outline" href="report-viewer.html?appointmentId=${encodeURIComponent(appointment.id)}">View</a>
-          <a class="btn btn-primary" download="${appointment.report.fileName || "report"}" href="${appointment.report.content || "#"}">Download</a>
+          <a class="btn btn-primary" download="${appointment.report.fileName || "report"}" href="${reportDownloadUrl(appointment)}">Download</a>
         </p>
       `;
     } else {
@@ -521,16 +527,6 @@ async function setupDoctorDashboardPage() {
     renderRows();
     renderReports();
     updateMetrics();
-  }
-
-  async function fetchDoctorAppointments(accessToken) {
-    const response = await window.alsFetchDoctorAppointments(accessToken);
-    if (!response.ok) {
-      const error = new Error((response.data && response.data.message) || "Unable to load appointments.");
-      error.status = response.status;
-      throw error;
-    }
-    return Array.isArray(response.data) ? response.data : [];
   }
 
   reportUploadForm?.addEventListener("submit", async (event) => {

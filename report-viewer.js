@@ -16,6 +16,13 @@ function getStoredAppointments() {
   }
 }
 
+function findStoredAppointment(appointmentId) {
+  return getStoredAppointments().find((item) => {
+    const itemBookingId = item.bookingId || item.booking_id || item.id || "";
+    return itemBookingId === appointmentId;
+  });
+}
+
 function formatDateTime(iso) {
   if (!iso) {
     return "-";
@@ -82,7 +89,10 @@ function normalizeApiAppointment(booking) {
     : booking.als_reports
       ? [booking.als_reports]
       : [];
-  const latestReport = reports[0] || null;
+  const embeddedReport = Array.isArray(booking.report)
+    ? booking.report[0]
+    : booking.report || null;
+  const latestReport = reports[0] || embeddedReport || null;
 
   return {
     id: booking.booking_id || booking.id,
@@ -103,44 +113,66 @@ function normalizeApiAppointment(booking) {
           note: latestReport.doctor_note || latestReport.note || "",
           uploadedAt: latestReport.uploaded_at || latestReport.uploadedAt || ""
         }
-      : booking.report || null
+      : null
   };
+}
+
+function reportDownloadUrl(appointment) {
+  const params = new URLSearchParams({
+    bookingId: appointment?.bookingId || appointment?.id || ""
+  });
+
+  const customerSessionRaw = localStorage.getItem(CUSTOMER_SESSION_KEY);
+  if (customerSessionRaw) {
+    try {
+      const customerSession = JSON.parse(customerSessionRaw);
+      if (customerSession?.phone) {
+        params.set("phone", customerSession.phone);
+      }
+    } catch {
+      // Keep download available for doctor/report links without customer phone.
+    }
+  }
+
+  return `/api/report-download?${params.toString()}`;
 }
 
 async function fetchAppointmentFromApi(appointmentId) {
   try {
     const customerSessionRaw = localStorage.getItem(CUSTOMER_SESSION_KEY);
-    if (customerSessionRaw && window.alsCustomerLookup) {
+    if (customerSessionRaw) {
       const customerSession = JSON.parse(customerSessionRaw);
-      const response = await window.alsCustomerLookup(appointmentId, customerSession.phone);
+      const response = await fetch(`/api/bookings?bookingId=${encodeURIComponent(appointmentId)}&phone=${encodeURIComponent(customerSession.phone || "")}`);
       if (response.ok) {
-        const row = Array.isArray(response.data) ? response.data[0] : response.data;
+        const payload = await response.json().catch(() => null);
         return mergeAppointmentData(
-          normalizeApiAppointment({
-            booking_id: row.booking_id,
-            id: row.id,
-            full_name: row.full_name,
-            report: row.report ? [row.report] : []
-          }),
-          normalizeLocalAppointment(getStoredAppointments().find((item) => item.id === appointmentId))
+          normalizeApiAppointment(payload?.booking),
+          normalizeLocalAppointment(findStoredAppointment(appointmentId))
         );
       }
     }
 
     const doctorSessionRaw = localStorage.getItem(DOCTOR_SESSION_KEY);
-    if (doctorSessionRaw && window.alsFetchAppointmentByBookingId) {
+    if (doctorSessionRaw) {
       const doctorSession = JSON.parse(doctorSessionRaw);
-      const response = await window.alsFetchAppointmentByBookingId(doctorSession.access_token, appointmentId);
+      const response = await fetch("/api/doctor-appointments", {
+        headers: {
+          Authorization: `Bearer ${doctorSession.access_token || ""}`
+        }
+      });
       if (response.ok) {
-        const row = Array.isArray(response.data) ? response.data[0] : response.data;
+        const payload = await response.json().catch(() => null);
+        const row = Array.isArray(payload?.appointments)
+          ? payload.appointments.find((item) => item.id === appointmentId || item.bookingId === appointmentId)
+          : null;
         return mergeAppointmentData(
           normalizeApiAppointment(row),
-          normalizeLocalAppointment(getStoredAppointments().find((item) => item.id === appointmentId))
+          normalizeLocalAppointment(findStoredAppointment(appointmentId))
         );
       }
     }
 
-    return normalizeLocalAppointment(getStoredAppointments().find((item) => item.id === appointmentId));
+    return normalizeLocalAppointment(findStoredAppointment(appointmentId));
   } catch {
     return null;
   }
@@ -162,7 +194,7 @@ async function renderReportViewer() {
   }
 
   const appointment = await fetchAppointmentFromApi(appointmentId)
-    || normalizeLocalAppointment(getStoredAppointments().find((item) => item.id === appointmentId));
+    || normalizeLocalAppointment(findStoredAppointment(appointmentId));
 
   if (!appointment) {
     viewerBox.innerHTML = "<p>Appointment not found.</p>";
@@ -179,6 +211,7 @@ async function renderReportViewer() {
   }
 
   const report = appointment.report;
+  const downloadUrl = reportDownloadUrl(appointment);
   const isPdf = (report.mimeType || "").includes("pdf") || (report.fileName || "").toLowerCase().endsWith(".pdf");
   const isImage = (report.mimeType || "").startsWith("image/");
 
@@ -189,7 +222,7 @@ async function renderReportViewer() {
       <div class="pdf-frame-wrap">
         <iframe title="Patient Report PDF" src="${report.content}" class="pdf-frame"></iframe>
       </div>
-      <p><a class="btn btn-primary" download="${report.fileName || "report"}" href="${report.content}">Download Report</a></p>
+      <p><a class="btn btn-primary" download="${report.fileName || "report"}" href="${downloadUrl}">Download Report</a></p>
     `;
     return;
   }
@@ -199,7 +232,7 @@ async function renderReportViewer() {
       <p><strong>Report:</strong> ${report.fileName || "-"}</p>
       <p><strong>Uploaded:</strong> ${formatDateTime(report.uploadedAt)}</p>
       <img class="report-preview-image" src="${report.content}" alt="Patient report preview" />
-      <p><a class="btn btn-primary" download="${report.fileName || "report"}" href="${report.content}">Download Report</a></p>
+      <p><a class="btn btn-primary" download="${report.fileName || "report"}" href="${downloadUrl}">Download Report</a></p>
     `;
     return;
   }
@@ -207,7 +240,7 @@ async function renderReportViewer() {
   viewerBox.innerHTML = `
     <p><strong>Report:</strong> ${report.fileName || "-"}</p>
     <p>This file type cannot be previewed directly.</p>
-    <p><a class="btn btn-primary" download="${report.fileName || "report"}" href="${report.content}">Download Report</a></p>
+    <p><a class="btn btn-primary" download="${report.fileName || "report"}" href="${downloadUrl}">Download Report</a></p>
   `;
 }
 

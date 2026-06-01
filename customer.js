@@ -19,6 +19,13 @@ function getStoredAppointments() {
   }
 }
 
+function findStoredAppointment(bookingId, phone) {
+  return getStoredAppointments().find((item) => {
+    const itemBookingId = item.bookingId || item.booking_id || item.id || "";
+    return itemBookingId === bookingId && item.phone === phone;
+  });
+}
+
 function showMessage(el, text, status) {
   if (!el) {
     return;
@@ -111,36 +118,47 @@ function mergeAppointmentData(primary, fallback) {
 }
 
 async function fetchAppointmentFromApi(bookingId, phone) {
-  if (!window.alsCustomerLookup) {
-    return null;
+  try {
+    const response = await fetch(`/api/bookings?bookingId=${encodeURIComponent(bookingId)}&phone=${encodeURIComponent(phone)}`);
+    const payload = await response.json().catch(() => null);
+    if (response.ok && payload?.booking) {
+      return mergeAppointmentData(
+        normalizeApiAppointment(payload.booking),
+        normalizeLocalAppointment(findStoredAppointment(bookingId, phone))
+      );
+    }
+  } catch {
+    // Fall through to the browser Supabase lookup for static deployments.
   }
 
-  try {
-    const response = await window.alsCustomerLookup(bookingId, phone);
-    if (!response.ok) {
+  if (window.alsCustomerLookup) {
+    try {
+      const response = await window.alsCustomerLookup(bookingId, phone);
+      if (!response.ok) {
+        return null;
+      }
+
+      const payload = Array.isArray(response.data) ? response.data[0] : response.data;
+      return mergeAppointmentData(
+        normalizeApiAppointment(payload),
+        normalizeLocalAppointment(findStoredAppointment(bookingId, phone))
+      );
+    } catch {
       return null;
     }
-
-    const payload = Array.isArray(response.data) ? response.data[0] : response.data;
-    return mergeAppointmentData(
-      normalizeApiAppointment(payload),
-      normalizeLocalAppointment(getStoredAppointments().find((item) => item.id === bookingId && item.phone === phone))
-    );
-  } catch {
-    return null;
   }
+
+  return null;
 }
 
 async function fetchAppointmentForDashboard(session) {
   const localAppointment = normalizeLocalAppointment(
-    getStoredAppointments().find((item) => item.id === session.bookingId && item.phone === session.phone)
+    findStoredAppointment(session.bookingId, session.phone)
   );
 
-  if (window.alsCustomerLookup) {
-    const apiAppointment = await fetchAppointmentFromApi(session.bookingId, session.phone);
-    if (apiAppointment) {
-      return mergeAppointmentData(apiAppointment, localAppointment);
-    }
+  const apiAppointment = await fetchAppointmentFromApi(session.bookingId, session.phone);
+  if (apiAppointment) {
+    return mergeAppointmentData(apiAppointment, localAppointment);
   }
 
   if (window.alsFetchAppointmentByBookingId && session.access_token) {
@@ -182,7 +200,7 @@ function setupCustomerLoginPage() {
     showMessage(message, "Verifying...", "");
 
     const appointment = (await fetchAppointmentFromApi(bookingId, phone))
-      || normalizeLocalAppointment(getStoredAppointments().find((item) => item.id === bookingId && item.phone === phone));
+      || normalizeLocalAppointment(findStoredAppointment(bookingId, phone));
 
     if (!appointment) {
       showMessage(message, "Booking ID and phone do not match our records.", "error");

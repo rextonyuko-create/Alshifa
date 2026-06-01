@@ -92,6 +92,19 @@ function normalizeFilename(name) {
     .replace(/^_+|_+$/g, '') || 'report';
 }
 
+function encodeStoragePath(path) {
+  return String(path || '')
+    .split('/')
+    .filter(Boolean)
+    .map((part) => encodeURIComponent(part))
+    .join('/');
+}
+
+function contentDispositionFilename(name) {
+  const safeName = normalizeFilename(name);
+  return `attachment; filename="${safeName}"; filename*=UTF-8''${encodeURIComponent(safeName)}`;
+}
+
 function parseDataUrl(dataUrl) {
   const match = String(dataUrl || '').match(/^data:([^;]+);base64,(.+)$/);
   if (!match) {
@@ -501,6 +514,57 @@ async function handleReportUpload(req, res) {
   });
 }
 
+async function handleReportDownload(req, res, url) {
+  if (req.method !== 'GET') {
+    return json(res, 405, { error: 'Method not allowed' });
+  }
+
+  const bookingId = String(url.searchParams.get('bookingId') || '').trim();
+  const phone = String(url.searchParams.get('phone') || '').trim();
+  if (!bookingId) {
+    return json(res, 400, { error: 'bookingId is required.' });
+  }
+
+  let path = `/rest/v1/als_appointments?select=id,booking_id,phone,als_reports(id,file_name,mime_type,storage_bucket,storage_path,public_url,uploaded_at)&booking_id=eq.${encodeURIComponent(bookingId)}&limit=1`;
+  if (phone) {
+    path += `&phone=eq.${encodeURIComponent(phone)}`;
+  }
+
+  const appointmentRes = await supabaseFetch(path, { headers: supabaseHeaders() });
+  if (!appointmentRes.ok) {
+    return json(res, 500, { error: appointmentRes.data?.message || 'Unable to load report.' });
+  }
+
+  const appointment = Array.isArray(appointmentRes.data) ? appointmentRes.data[0] : appointmentRes.data;
+  const report = Array.isArray(appointment?.als_reports) ? appointment.als_reports[0] : null;
+  if (!appointment || !report?.storage_path) {
+    return json(res, 404, { error: 'Report not found.' });
+  }
+
+  const bucket = report.storage_bucket || 'als-reports';
+  const objectUrl = `${process.env.SUPABASE_URL}/storage/v1/object/${encodeURIComponent(bucket)}/${encodeStoragePath(report.storage_path)}`;
+  const fileRes = await fetch(objectUrl, {
+    headers: {
+      apikey: process.env.SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`
+    }
+  });
+
+  if (!fileRes.ok) {
+    return json(res, fileRes.status === 404 ? 404 : 500, { error: 'Unable to download report file.' });
+  }
+
+  const buffer = Buffer.from(await fileRes.arrayBuffer());
+  res.writeHead(200, {
+    'Content-Type': report.mime_type || 'application/octet-stream',
+    'Content-Disposition': contentDispositionFilename(report.file_name || 'report'),
+    'Content-Length': String(buffer.length),
+    'Cache-Control': 'private, no-store'
+  });
+  res.end(buffer);
+  return undefined;
+}
+
 async function serveStatic(req, res, urlPath) {
   const safePath = normalize(urlPath).replace(/^(\.\.[/\\])+/, '');
   const relative = safePath === '/' ? '/index.html' : safePath;
@@ -555,6 +619,10 @@ async function main() {
 
       if (requestUrl.pathname === '/api/report-upload') {
         return handleReportUpload(req, res);
+      }
+
+      if (requestUrl.pathname === '/api/report-download') {
+        return handleReportDownload(req, res, requestUrl);
       }
 
       return serveStatic(req, res, requestUrl.pathname);
