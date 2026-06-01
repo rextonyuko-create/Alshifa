@@ -1,5 +1,3 @@
-const APPOINTMENTS_KEY = "alshifaAppointments";
-
 const bookingForm = document.getElementById("bookingForm");
 const dateInput = document.getElementById("dateInput");
 const slotSelect = document.getElementById("slotSelect");
@@ -42,26 +40,6 @@ function setSlots() {
   });
 }
 
-function getStoredAppointments() {
-  const raw = localStorage.getItem(APPOINTMENTS_KEY);
-  if (!raw) {
-    return [];
-  }
-
-  try {
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveAppointment(record) {
-  const appointments = getStoredAppointments();
-  appointments.push(record);
-  localStorage.setItem(APPOINTMENTS_KEY, JSON.stringify(appointments));
-}
-
 dateInput.addEventListener("change", setSlots);
 
 bookingForm.addEventListener("submit", async (event) => {
@@ -82,50 +60,36 @@ bookingForm.addEventListener("submit", async (event) => {
   const collection = String(formData.get("collection") || "").trim();
   const bookingId = `APT-${Date.now()}`;
 
-  const localRecord = {
-    id: bookingId,
-    bookingId,
-    name,
-    phone,
-    test,
-    date,
-    slot,
-    collection,
-    status: "Pending",
-    report: null,
-    bookedAt: new Date().toISOString(),
-    source: "website"
-  };
-
-  saveAppointment(localRecord);
+  showMessage("Submitting booking...", "");
 
   try {
-    if (window.alsInsertAppointment) {
-      const response = await window.alsInsertAppointment({
-        booking_id: bookingId,
-        full_name: name,
+    const response = await fetch("/api/bookings", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        name,
         phone,
-        test_name: test,
-        appointment_date: date,
-        time_slot: slot,
-        collection_type: collection,
-        status: "Pending",
-        source: "website"
-      });
+        test,
+        date,
+        slot,
+        collection,
+        bookingId
+      })
+    });
 
-      if (!response.ok) {
-        throw new Error((response.data && response.data.message) || "Failed to save booking.");
-      }
+    const result = await response.json().catch(() => null);
+    if (!response.ok || !result?.success || !result?.booking?.bookingId) {
+      throw new Error(result?.error || "Booking could not be saved. Please try again.");
     }
 
-    showMessage(`Booked successfully! Your Booking ID: ${bookingId}. Use this ID + your phone number to view your report in Customer Login.`, "success");
+    showMessage(`Booked successfully! Your Booking ID: ${result.booking.bookingId}. Use this ID + your phone number to view your report in Customer Login.`, "success");
     bookingForm.reset();
     slotSelect.innerHTML = '<option value="">Select date first</option>';
   } catch (error) {
     console.error("Booking API Error:", error);
-    showMessage(`Booked successfully! Your Booking ID: ${bookingId}. Use this ID + your phone number to view your report in Customer Login.`, "success");
-    bookingForm.reset();
-    slotSelect.innerHTML = '<option value="">Select date first</option>';
+    showMessage(error.message || "Booking failed. Please try again.", "error");
   }
 });
 

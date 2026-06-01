@@ -2,6 +2,7 @@
   "name": "alshifa-pathology",
   "version": "1.0.0",
   "description": "Alshifa Pathology Lab booking system",
+  "type": "module",
   "private": true,
   "scripts": {
     "start": "node server.mjs",

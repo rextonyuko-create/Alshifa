@@ -125,15 +125,26 @@ function supabaseHeaders({ auth = false, contentType = false } = {}) {
 
 async function supabaseFetch(path, options = {}) {
   const url = `${process.env.SUPABASE_URL}${path}`;
-  const response = await fetch(url, options);
-  const text = await response.text();
-  const isJson = (response.headers.get('content-type') || '').includes('application/json');
-  return {
-    ok: response.ok,
-    status: response.status,
-    data: isJson && text ? JSON.parse(text) : text,
-    raw: text
-  };
+  try {
+    const response = await fetch(url, options);
+    const text = await response.text();
+    const isJson = (response.headers.get('content-type') || '').includes('application/json');
+    return {
+      ok: response.ok,
+      status: response.status,
+      data: isJson && text ? JSON.parse(text) : text,
+      raw: text
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      status: 502,
+      data: {
+        message: `Unable to reach Supabase: ${error.message}`
+      },
+      raw: error.message
+    };
+  }
 }
 
 async function verifyStaffToken(token) {
