@@ -1,25 +1,5 @@
 const APPOINTMENTS_KEY = "alshifaAppointments";
 const DOCTOR_SESSION_KEY = "alshifaDoctorSession";
-const TEMP_DOCTOR_ID = "doctor@alshifa.local";
-const TEMP_DOCTOR_PASSWORD = "alshifa123";
-
-function getStoredAppointments() {
-  const raw = localStorage.getItem(APPOINTMENTS_KEY);
-  if (!raw) {
-    return [];
-  }
-
-  try {
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function setStoredAppointments(list) {
-  localStorage.setItem(APPOINTMENTS_KEY, JSON.stringify(list));
-}
 
 function resolveDoctorEmail(input) {
   const value = String(input || "").trim().toLowerCase();
@@ -215,102 +195,21 @@ function statusBadge(status) {
 }
 
 async function loginStaff(doctorId, password) {
-  try {
-    const response = await apiJson("/api/staff-login", {
-      method: "POST",
-      body: JSON.stringify({ doctorId, password })
-    });
+  const response = await apiJson("/api/staff-login", {
+    method: "POST",
+    body: JSON.stringify({ doctorId, password })
+  });
 
-    if (!response.ok) {
-      throw new Error((response.data && response.data.error) || "Unable to sign in.");
-    }
-
-    return {
-      session: response.data.session,
-      user: response.data.user,
-      profile: response.data.profile,
-      mode: "api"
-    };
-  } catch (apiError) {
-    if (window.alsAuthLogin) {
-      try {
-        const response = await window.alsAuthLogin(doctorId, password);
-        if (!response.ok) {
-          throw new Error((response.data && response.data.error_description) || "Unable to sign in.");
-        }
-
-        const session = response.data;
-        const profileLookup = await window.alsSupabaseRequest(`/rest/v1/als_staff_profiles?id=eq.${encodeURIComponent(session.user.id)}&select=id,role,display_name,is_active`, {
-          accessToken: session.access_token
-        });
-
-        if (!profileLookup.ok || !Array.isArray(profileLookup.data) || !profileLookup.data[0] || !profileLookup.data[0].is_active) {
-          throw new Error("This account is not enabled for staff access.");
-        }
-
-        return {
-          session,
-          user: session.user,
-          profile: profileLookup.data[0],
-          mode: "supabase"
-        };
-      } catch (error) {
-        if (doctorId === TEMP_DOCTOR_ID && password === TEMP_DOCTOR_PASSWORD) {
-          return {
-            session: {
-              access_token: "",
-              refresh_token: "",
-              expires_at: null,
-              user: {
-                id: "local-doctor",
-                email: TEMP_DOCTOR_ID
-              }
-            },
-            user: {
-              id: "local-doctor",
-              email: TEMP_DOCTOR_ID
-            },
-            profile: {
-              id: "local-doctor",
-              role: "doctor",
-              display_name: "Doctor",
-              is_active: true
-            },
-            mode: "local"
-          };
-        }
-
-        throw error;
-      }
-    }
-
-    if (doctorId === TEMP_DOCTOR_ID && password === TEMP_DOCTOR_PASSWORD) {
-      return {
-        session: {
-          access_token: "",
-          refresh_token: "",
-          expires_at: null,
-          user: {
-            id: "local-doctor",
-            email: TEMP_DOCTOR_ID
-          }
-        },
-        user: {
-          id: "local-doctor",
-          email: TEMP_DOCTOR_ID
-        },
-        profile: {
-          id: "local-doctor",
-          role: "doctor",
-          display_name: "Doctor",
-          is_active: true
-        },
-        mode: "local"
-      };
-    }
-
-    throw apiError;
+  if (!response.ok) {
+    throw new Error((response.data && response.data.error) || "Unable to sign in.");
   }
+
+  return {
+    session: response.data.session,
+    user: response.data.user,
+    profile: response.data.profile,
+    mode: "api"
+  };
 }
 
 async function fetchDoctorAppointments(accessToken) {
@@ -432,12 +331,8 @@ async function setupDoctorDashboardPage() {
   const uploadMessage = document.getElementById("uploadMessage");
   const existingReportBox = document.getElementById("existingReportBox");
 
-  let appointments = mergeAppointments([], getStoredAppointments());
+  let appointments = [];
   let selectedAppointmentId = null;
-
-  function persistAppointments() {
-    setStoredAppointments(appointments);
-  }
 
   function findSelectedAppointment() {
     return appointments.find((item) => item.id === selectedAppointmentId) || null;
@@ -599,13 +494,12 @@ async function setupDoctorDashboardPage() {
 
   async function loadAppointments() {
     try {
-      if (session?.access_token) {
-        const apiAppointments = await fetchDoctorAppointments(session.access_token);
-        appointments = mergeAppointments(apiAppointments, getStoredAppointments());
-        persistAppointments();
-      } else {
-        appointments = mergeAppointments([], getStoredAppointments());
+      if (!session?.access_token) {
+        throw new Error("Invalid staff session. Please sign in again.");
       }
+
+      const apiAppointments = await fetchDoctorAppointments(session.access_token);
+      appointments = mergeAppointments(apiAppointments, []);
     } catch (error) {
       if (error?.status === 401 || error?.status === 403) {
         localStorage.removeItem(DOCTOR_SESSION_KEY);
@@ -613,7 +507,8 @@ async function setupDoctorDashboardPage() {
         return;
       }
 
-      appointments = mergeAppointments([], getStoredAppointments());
+      showMessage(uploadMessage, error.message || "Unable to load appointments from Supabase.", "error");
+      appointments = [];
     }
 
     uniqueValues(appointments, "test").forEach((testName) => {
@@ -654,57 +549,19 @@ async function setupDoctorDashboardPage() {
     }
 
     try {
-      if (session?.access_token) {
-        const updatedAppointment = await uploadReportToApi(session.access_token, appointment, file, doctorNoteInput?.value.trim() || "");
-        const normalized = normalizeLocalAppointment(updatedAppointment);
-        appointments = mergeAppointments([normalized], appointments.filter((item) => item.id !== normalized.id));
-        persistAppointments();
-        renderRows();
-        renderReports();
-        openModal(appointment.id);
-        showMessage(uploadMessage, "Report uploaded successfully and patient marked completed.", "success");
-      } else {
-        const content = await fileToDataUrl(file);
-        appointment.report = {
-          fileName: file.name,
-          mimeType: file.type || "application/octet-stream",
-          content,
-          note: doctorNoteInput?.value.trim() || "",
-          uploadedAt: new Date().toISOString()
-        };
-        appointment.status = "Completed";
-        persistAppointments();
-        renderRows();
-        renderReports();
-        openModal(appointment.id);
-        showMessage(uploadMessage, "Report saved locally. Supabase upload is unavailable, so it is only available in this browser for now.", "error");
+      if (!session?.access_token) {
+        throw new Error("Invalid staff session. Please sign in again.");
       }
+
+      const updatedAppointment = await uploadReportToApi(session.access_token, appointment, file, doctorNoteInput?.value.trim() || "");
+      const normalized = normalizeLocalAppointment(updatedAppointment);
+      appointments = mergeAppointments([normalized], appointments.filter((item) => item.id !== normalized.id));
+      renderRows();
+      renderReports();
+      openModal(appointment.id);
+      showMessage(uploadMessage, "Report uploaded successfully and patient marked completed.", "success");
     } catch (error) {
-      try {
-        const content = await fileToDataUrl(file);
-        appointment.report = {
-          fileName: file.name,
-          mimeType: file.type || "application/octet-stream",
-          content,
-          note: doctorNoteInput?.value.trim() || "",
-          uploadedAt: new Date().toISOString()
-        };
-        appointment.status = "Completed";
-        persistAppointments();
-        renderRows();
-        renderReports();
-        openModal(appointment.id);
-        const remoteIssue = error?.message
-          ? `Remote sync is unavailable (${error.message}).`
-          : "Remote sync is unavailable.";
-        showMessage(
-          uploadMessage,
-          `${remoteIssue} The report was saved locally and is available in this browser only for now.`,
-          "success"
-        );
-      } catch {
-        showMessage(uploadMessage, error.message || "Unable to upload report. Please retry.", "error");
-      }
+      showMessage(uploadMessage, error.message || "Unable to upload report. Please retry.", "error");
     }
   });
 

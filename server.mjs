@@ -25,9 +25,7 @@ function loadEnvFile(path) {
 
         const key = trimmed.slice(0, idx).trim();
         const value = trimmed.slice(idx + 1).trim().replace(/^['"]|['"]$/g, '');
-        if (!process.env[key]) {
-          process.env[key] = value;
-        }
+        process.env[key] = value;
       });
     })
     .catch(() => {});
@@ -536,6 +534,7 @@ async function serveStatic(req, res, urlPath) {
 }
 
 async function main() {
+  await loadEnvFile(join(PUBLIC_DIR, '.env.local'));
   await loadEnvFile(join(PUBLIC_DIR, '.env.local'));
 
   const server = createServer(async (req, res) => {

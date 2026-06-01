@@ -8,7 +8,7 @@ function resolveEmail(input) {
   if (value.includes('@')) {
     return value;
   }
-  return `${value}@alshifalab.com`;
+  return `${value}@alshifa.local`;
 }
 
 export default async function handler(req, res) {

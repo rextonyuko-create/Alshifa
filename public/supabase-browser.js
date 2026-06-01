@@ -1,4 +1,4 @@
-window.ALS_SUPABASE_URL = "https://zzemxfwngaqxipqikucw.supabase.co";
+window.ALS_SUPABASE_URL = "https://zzemxfwngaxqipqikucw.supabase.co";
 window.ALS_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp6ZW14ZnduZ2F4cWlwcWlrdWN3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAxOTA2NDAsImV4cCI6MjA5NTc2NjY0MH0.2mw_ETcvoombb1UK7Gxu-qXX9LW5tpBxqHX8gzkYI";
 
 function alsSupabaseHeaders(accessToken, extra = {}) {
