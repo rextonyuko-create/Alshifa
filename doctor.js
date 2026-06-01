@@ -66,6 +66,32 @@ function fileToDataUrl(file) {
   });
 }
 
+async function apiJson(path, options = {}) {
+  const response = await fetch(path, {
+    method: options.method || "GET",
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers || {})
+    },
+    body: options.body
+  });
+
+  const text = await response.text();
+  const data = text ? (() => {
+    try {
+      return JSON.parse(text);
+    } catch {
+      return text;
+    }
+  })() : null;
+
+  return {
+    ok: response.ok,
+    status: response.status,
+    data
+  };
+}
+
 function normalizeLocalAppointment(row) {
   if (!row) {
     return null;
@@ -189,100 +215,142 @@ function statusBadge(status) {
 }
 
 async function loginStaff(doctorId, password) {
-  if (window.alsAuthLogin) {
-    try {
-      const response = await window.alsAuthLogin(doctorId, password);
-      if (!response.ok) {
-        throw new Error((response.data && response.data.error_description) || "Unable to sign in.");
-      }
+  try {
+    const response = await apiJson("/api/staff-login", {
+      method: "POST",
+      body: JSON.stringify({ doctorId, password })
+    });
 
-      const session = response.data;
-      const profileLookup = await window.alsSupabaseRequest(`/rest/v1/als_staff_profiles?id=eq.${encodeURIComponent(session.user.id)}&select=id,role,display_name,is_active`, {
-        accessToken: session.access_token
-      });
+    if (!response.ok) {
+      throw new Error((response.data && response.data.error) || "Unable to sign in.");
+    }
 
-      if (!profileLookup.ok || !Array.isArray(profileLookup.data) || !profileLookup.data[0] || !profileLookup.data[0].is_active) {
-        throw new Error("This account is not enabled for staff access.");
-      }
+    return {
+      session: response.data.session,
+      user: response.data.user,
+      profile: response.data.profile,
+      mode: "api"
+    };
+  } catch (apiError) {
+    if (window.alsAuthLogin) {
+      try {
+        const response = await window.alsAuthLogin(doctorId, password);
+        if (!response.ok) {
+          throw new Error((response.data && response.data.error_description) || "Unable to sign in.");
+        }
 
-      return {
-        session,
-        user: session.user,
-        profile: profileLookup.data[0],
-        mode: "supabase"
-      };
-    } catch (error) {
-      if (doctorId === TEMP_DOCTOR_ID && password === TEMP_DOCTOR_PASSWORD) {
+        const session = response.data;
+        const profileLookup = await window.alsSupabaseRequest(`/rest/v1/als_staff_profiles?id=eq.${encodeURIComponent(session.user.id)}&select=id,role,display_name,is_active`, {
+          accessToken: session.access_token
+        });
+
+        if (!profileLookup.ok || !Array.isArray(profileLookup.data) || !profileLookup.data[0] || !profileLookup.data[0].is_active) {
+          throw new Error("This account is not enabled for staff access.");
+        }
+
         return {
-          session: {
-            access_token: "",
-            refresh_token: "",
-            expires_at: null,
+          session,
+          user: session.user,
+          profile: profileLookup.data[0],
+          mode: "supabase"
+        };
+      } catch (error) {
+        if (doctorId === TEMP_DOCTOR_ID && password === TEMP_DOCTOR_PASSWORD) {
+          return {
+            session: {
+              access_token: "",
+              refresh_token: "",
+              expires_at: null,
+              user: {
+                id: "local-doctor",
+                email: TEMP_DOCTOR_ID
+              }
+            },
             user: {
               id: "local-doctor",
               email: TEMP_DOCTOR_ID
-            }
-          },
+            },
+            profile: {
+              id: "local-doctor",
+              role: "doctor",
+              display_name: "Doctor",
+              is_active: true
+            },
+            mode: "local"
+          };
+        }
+
+        throw error;
+      }
+    }
+
+    if (doctorId === TEMP_DOCTOR_ID && password === TEMP_DOCTOR_PASSWORD) {
+      return {
+        session: {
+          access_token: "",
+          refresh_token: "",
+          expires_at: null,
           user: {
             id: "local-doctor",
             email: TEMP_DOCTOR_ID
-          },
-          profile: {
-            id: "local-doctor",
-            role: "doctor",
-            display_name: "Doctor",
-            is_active: true
-          },
-          mode: "local"
-        };
-      }
-
-      throw error;
-    }
-  }
-
-  if (doctorId === TEMP_DOCTOR_ID && password === TEMP_DOCTOR_PASSWORD) {
-    return {
-      session: {
-        access_token: "",
-        refresh_token: "",
-        expires_at: null,
+          }
+        },
         user: {
           id: "local-doctor",
           email: TEMP_DOCTOR_ID
-        }
-      },
-      user: {
-        id: "local-doctor",
-        email: TEMP_DOCTOR_ID
-      },
-      profile: {
-        id: "local-doctor",
-        role: "doctor",
-        display_name: "Doctor",
-        is_active: true
-      },
-      mode: "local"
-    };
-  }
+        },
+        profile: {
+          id: "local-doctor",
+          role: "doctor",
+          display_name: "Doctor",
+          is_active: true
+        },
+        mode: "local"
+      };
+    }
 
-  throw new Error("Unable to sign in.");
+    throw apiError;
+  }
 }
 
 async function fetchDoctorAppointments(accessToken) {
-  const response = await window.alsFetchDoctorAppointments(accessToken);
+  const response = await apiJson("/api/doctor-appointments", {
+    headers: {
+      Authorization: `Bearer ${accessToken || ""}`
+    }
+  });
   if (!response.ok) {
-    const error = new Error((response.data && response.data.message) || "Unable to load appointments.");
+    const error = new Error((response.data && response.data.error) || (response.data && response.data.message) || "Unable to load appointments.");
     error.status = response.status;
     throw error;
   }
 
-  return Array.isArray(response.data) ? response.data : [];
+  return Array.isArray(response.data?.appointments) ? response.data.appointments : [];
 }
 
 async function uploadReportToApi(accessToken, appointment, file, doctorNote) {
-  const result = await window.alsUploadReport(accessToken, appointment.appointmentUuid || appointment.id, appointment.id, file, doctorNote);
-  return result;
+  const contentDataUrl = await fileToDataUrl(file);
+  const response = await apiJson("/api/report-upload", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken || ""}`
+    },
+    body: JSON.stringify({
+      bookingId: appointment.bookingId || appointment.id,
+      fileName: file.name,
+      mimeType: file.type || "application/octet-stream",
+      contentDataUrl,
+      doctorNote
+    })
+  });
+
+  if (!response.ok) {
+    const error = new Error((response.data && response.data.error) || "Unable to upload report.");
+    error.status = response.status;
+    throw error;
+  }
+
+  return response.data?.appointment || response.data;
 }
 
 function setupDoctorLoginPage() {
@@ -531,7 +599,7 @@ async function setupDoctorDashboardPage() {
 
   async function loadAppointments() {
     try {
-      if (session?.access_token && window.alsFetchDoctorAppointments) {
+      if (session?.access_token) {
         const apiAppointments = await fetchDoctorAppointments(session.access_token);
         appointments = mergeAppointments(apiAppointments, getStoredAppointments());
         persistAppointments();
@@ -586,7 +654,7 @@ async function setupDoctorDashboardPage() {
     }
 
     try {
-      if (session?.access_token && window.alsUploadReport) {
+      if (session?.access_token) {
         const updatedAppointment = await uploadReportToApi(session.access_token, appointment, file, doctorNoteInput?.value.trim() || "");
         const normalized = normalizeLocalAppointment(updatedAppointment);
         appointments = mergeAppointments([normalized], appointments.filter((item) => item.id !== normalized.id));
