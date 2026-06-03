@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { notifyAdminOnAppointment } from '../lib/twilio.js';
 
 function createSupabaseClient() {
   const supabaseUrl = process.env.SUPABASE_URL;
@@ -49,6 +50,17 @@ export default async function handler(req, res) {
         .single();
 
       if (error) throw error;
+
+      await notifyAdminOnAppointment({
+        name: data.full_name,
+        phone: data.phone,
+        test: data.test_name,
+        date: data.appointment_date,
+        slot: data.time_slot,
+        collection: data.collection_type
+      }).catch((notifyError) => {
+        console.error('Twilio WhatsApp notification failed:', notifyError);
+      });
 
       return res.status(200).json({
         success: true,

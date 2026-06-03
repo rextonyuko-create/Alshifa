@@ -3,6 +3,7 @@ import { readFile, stat } from 'node:fs/promises';
 import { createReadStream } from 'node:fs';
 import { extname, join, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { notifyAdminOnAppointment } from './lib/twilio.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = resolve(__filename, '..');
@@ -221,6 +222,16 @@ async function handleBookings(req, res, url) {
     }
 
     const data = Array.isArray(insertRes.data) ? insertRes.data[0] : insertRes.data;
+    await notifyAdminOnAppointment({
+      name: data.full_name,
+      phone: data.phone,
+      test: data.test_name,
+      date: data.appointment_date,
+      slot: data.time_slot,
+      collection: data.collection_type
+    }).catch((error) => {
+      console.error('Twilio WhatsApp notification failed:', error);
+    });
     return json(res, 200, {
       success: true,
       booking: {
